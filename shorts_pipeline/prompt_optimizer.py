@@ -1,5 +1,6 @@
 from .config import settings
 from .database import db
+from .llm import chat_json
 from .performance_analyzer import performance_analyzer
 from .utils import parse_json_response
 from openai import OpenAI
@@ -57,8 +58,10 @@ class PromptOptimizer:
 }}"""
 
         try:
-            response = client.chat.completions.create(
-                model=settings.nvidia_model,
+            result = chat_json(
+                client,
+                primary_model=settings.nvidia_model,
+                fallback_model=settings.nvidia_model_fast,
                 messages=[
                     {"role": "system", "content": system},
                     {"role": "user", "content": prompt},
@@ -66,8 +69,6 @@ class PromptOptimizer:
                 temperature=0.5,
                 max_tokens=2000,
             )
-
-            result = parse_json_response(response.choices[0].message.content)
             new_version = current_version + 1
             prompt_id = db.create_prompt_version(
                 component=component,

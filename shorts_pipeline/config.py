@@ -20,7 +20,11 @@ class Settings(BaseSettings):
         validation_alias="NVIDIA_BASE_URL",
     )
     nvidia_model: str = Field(
-        default="meta/llama-3.1-70b-instruct", validation_alias="NVIDIA_MODEL"
+        default="z-ai/glm-5.3-flash", validation_alias="NVIDIA_MODEL"
+    )
+    nvidia_model_fast: str = Field(
+        default="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        validation_alias="NVIDIA_MODEL_FAST",
     )
     nvidia_temperature: float = Field(
         default=0.7, validation_alias="NVIDIA_TEMPERATURE"

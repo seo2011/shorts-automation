@@ -1,6 +1,6 @@
 from supabase import create_client, Client
 from typing import Optional, List, Dict, Any
-from datetime import datetime, date, timedelta
+from datetime import datetime, timezone, date, timedelta
 import uuid
 from .config import settings
 from .models import (
@@ -258,7 +258,7 @@ class Database:
             start = datetime.fromisoformat(
                 res.data["started_at"].replace("Z", "+00:00")
             )
-            duration = int((datetime.utcnow() - start).total_seconds())
+            duration = int((datetime.now(timezone.utc) - start).total_seconds())
 
         self.client.table("pipeline_runs").update(
             {

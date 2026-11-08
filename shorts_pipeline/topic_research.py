@@ -2,6 +2,7 @@ from typing import List
 from .config import settings
 from .models import TopicResearchResult, TopicCategory
 from .database import db
+from .llm import chat_json
 from .utils import parse_json_response
 from openai import OpenAI
 import json
@@ -14,40 +15,77 @@ def get_topic_prompt():
     if active:
         return active["system_prompt"], active["prompt_template"]
 
-    system = """당신은 미국 시청자들이 열광하는 쇼츠 주제를 발굴하는 전문 리서처입니다.
-대상: 미국 18-45세, 역사/미스터리/실화 범죄/기묘한 우연에 관심 많은 층
-포맷: 30초 쇼츠 (약 80단어 내외), 강렬한 훅 필수"""
+    system = """You are a professional researcher who discovers YouTube Shorts topics that US audiences love.
+Target audience: Americans aged 18-45 who are hooked on history, unsolved mysteries, true crime, and bizarre coincidences.
+Format: 30-second Shorts (about 80 words) with a powerful hook in the first 3 seconds.
+CRITICAL: Write every field in ENGLISH only. Never use any other language."""
 
-    template = """다음 카테고리 중 하나에서 **미국인들이 가장 좋아할 만한** 주제 1개를 추천하세요:
+    template = """Recommend ONE topic from the following categories that US viewers are most likely to love:
 
-카테고리:
-1. historical_mystery: 해결되지 않은 역사적 미스터리, 사라진 문명, 기묘한 고고학적 발견
-2. true_crime: 기묘한 미제 사건, 연쇄살인마의 기이한 패턴, 법의학으로 풀린 오래된 사건
-3. coincidence: 소름 돋는 우연의 일치, 예언적 꿈, 평행우주 같은 실화
+Categories:
+1. historical_mystery: unsolved historical mysteries, vanished civilizations, bizarre archaeological finds
+2. true_crime: bizarre cold cases, strange serial-killer patterns, old cases cracked by forensics
+3. coincidence: chilling coincidences, predictive dreams, parallel-universe-like true stories
 
-선정 기준:
-- 미국인들에게 친숙하거나 관심이 높은 소재
-- 30초 안에 "와..." 소리가 나오게 전달 가능
-- 시각적으로 흥미로운 이미지 소재가 많음
-- 댓글 유도 포인트 명확
+Selection criteria:
+- Subjects that are familiar to or fascinating to Americans
+- Must be able to deliver a "whoa" reaction within 30 seconds
+- Rich in visually striking imagery
+- Clear comment-baiting angle
 
-최근 업로드한 주제들 (중복 피함):
+Recently uploaded topics (avoid duplicates):
 {recent_topics}
 
-상위 성과 영상들의 공통 패턴:
+Patterns shared by top performing videos:
 {top_patterns}
 
-JSON으로만 응답하세요:
+Respond with ONLY valid JSON. Every string must be in English:
 {
-    "topic_title": "구체적 주제명",
+    "topic_title": "specific, concrete topic title in English",
     "category": "historical_mystery|true_crime|coincidence",
-    "hook": "첫 3초 훅 문장",
-    "why_viral": "이 주제가 바이럴 될 이유 3가지",
-    "key_points": ["핵심 포인트 1", "핵심 포인트 2", "핵심 포인트 3", "핵심 포인트 4"],
+    "hook": "one punchy first-3-seconds hook sentence in English",
+    "why_viral": "why this topic will go viral, 3 reasons",
+    "key_points": ["key point 1", "key point 2", "key point 3", "key point 4"],
     "source_urls": [],
     "estimated_interest_score": 85
 }"""
     return system, template
+
+
+def _normalize_topic_result(data: dict) -> dict:
+    """LLM이 스키마와 다르게 반환하는 경우를 보정한다."""
+    for key in ("topic_title", "hook", "why_viral"):
+        value = data.get(key)
+        if isinstance(value, list):
+            data[key] = " ".join(str(v).strip() for v in value)
+        elif value is None:
+            data[key] = ""
+        elif isinstance(value, str) and not value.strip().startswith('"'):
+            # 키 앞쪽에 개행/들여쓰기가 붙은 경우 보정
+            data[key] = value.strip().split("\n")[-1].strip().strip('"').strip()
+
+    key_points = data.get("key_points")
+    if isinstance(key_points, str):
+        data["key_points"] = [kp.strip() for kp in key_points.split(",") if kp.strip()]
+    elif isinstance(key_points, list):
+        data["key_points"] = [str(kp).strip() for kp in key_points if str(kp).strip()]
+    else:
+        data["key_points"] = []
+
+    if not isinstance(data.get("source_urls"), list):
+        data["source_urls"] = []
+
+    try:
+        score = float(data.get("estimated_interest_score", 75))
+    except (TypeError, ValueError):
+        score = 75.0
+    data["estimated_interest_score"] = min(max(score, 0.0), 100.0)
+
+    category = str(data.get("category", "")).strip().lower()
+    if category not in {"historical_mystery", "true_crime", "coincidence"}:
+        category = "historical_mystery"
+    data["category"] = category
+    return data
 
 
 def research_topic() -> TopicResearchResult:
@@ -72,25 +110,34 @@ def research_topic() -> TopicResearchResult:
     )
 
     system, template = get_topic_prompt()
-    prompt = template.format(recent_topics=recent_topics, top_patterns=top_patterns)
+    prompt = template.replace("{recent_topics}", recent_topics).replace(
+        "{top_patterns}", top_patterns
+    )
 
     response = client.chat.completions.create(
-        model=settings.nvidia_model,
+        model=settings.nvidia_model_fast,
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": prompt},
         ],
         temperature=settings.nvidia_temperature,
-        max_tokens=1000,
+        max_tokens=2000,
     )
 
-    result = parse_json_response(response.choices[0].message.content)
-    try:
-        return TopicResearchResult(**result)
-    except Exception:
-        # 카테고리 값이 예상과 다르면 기본값으로 보정 후 재시도
-        result["category"] = "historical_mystery"
-        return TopicResearchResult(**result)
+    result = _normalize_topic_result(
+        chat_json(
+            client,
+            primary_model=settings.nvidia_model_fast,
+            fallback_model=settings.nvidia_model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=settings.nvidia_temperature,
+            max_tokens=2000,
+        )
+    )
+    return TopicResearchResult(**result)
 
 
 def generate_multiple_topics(count: int = 3) -> List[TopicResearchResult]:

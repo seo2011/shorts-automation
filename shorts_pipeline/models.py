@@ -25,30 +25,30 @@ class VideoStatus(str, Enum):
 
 class TopicResearchResult(BaseModel):
     topic_title: str
-    category: TopicCategory
-    hook: str
-    why_viral: str
-    key_points: List[str]
+    category: TopicCategory = TopicCategory.HISTORICAL_MYSTERY
+    hook: str = ""
+    why_viral: str = ""
+    key_points: List[str] = []
     source_urls: List[str] = []
-    estimated_interest_score: float = Field(ge=0, le=100)
+    estimated_interest_score: float = Field(default=75.0, ge=0, le=100)
 
 
 class ScriptScene(BaseModel):
-    scene_number: int
+    scene_number: int = 1
     narration: str
-    image_prompt: str
-    duration_seconds: float
-    visual_description: str
+    image_prompt: str = "cinematic vertical scene, dramatic lighting"
+    duration_seconds: float = 3.75
+    visual_description: str = ""
 
 
 class ScriptResult(BaseModel):
     title: str
-    description: str
-    tags: List[str]
-    hook_text: str
     scenes: List[ScriptScene]
-    total_duration: float
-    total_words: int
+    description: str = ""
+    tags: List[str] = []
+    hook_text: str = ""
+    total_duration: float = 30.0
+    total_words: int = 0
     hashtags: List[str] = []
 
 

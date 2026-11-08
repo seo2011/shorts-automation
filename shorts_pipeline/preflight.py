@@ -33,18 +33,23 @@ def main() -> int:
         client = OpenAI(
             api_key=settings.nvidia_api_key,
             base_url=settings.nvidia_base_url,
-            timeout=30,
+            timeout=90,
             max_retries=1,
         )
-        print(f"  model: {settings.nvidia_model}")
-        resp = client.chat.completions.create(
-            model=settings.nvidia_model,
-            messages=[{"role": "user", "content": "Reply with the single word OK."}],
-            max_tokens=10,
-            temperature=0,
-        )
-        text = (resp.choices[0].message.content or "").strip()
-        print(f"  response: {text[:50]}")
+        for label, model in (
+            ("main", settings.nvidia_model),
+            ("fast", settings.nvidia_model_fast),
+        ):
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "user", "content": "Reply with the single word OK."}
+                ],
+                max_tokens=50,
+                temperature=0,
+            )
+            text = (resp.choices[0].message.content or "").strip()
+            print(f"  {label} ({model}): OK, response={text[:30]!r}")
     except Exception as e:
         ok = False
         print(f"  FAILED: {type(e).__name__}: {e}")
