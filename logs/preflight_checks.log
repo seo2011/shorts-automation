@@ -1,0 +1,16 @@
+===== 1. Supabase =====
+  videos: OK (sample rows=0)
+  video_metrics: OK (sample rows=0)
+  prompt_versions: OK (sample rows=0)
+  pipeline_runs: OK (sample rows=0)
+===== 2. NVIDIA LLM =====
+  model: nvidia/nemotron-3-ultra-550b-a55b
+  response: 
+===== 3. YouTube OAuth =====
+/opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/google/api_core/_python_version_support.py:273: FutureWarning: You are using a Python version (3.11.18) which Google will stop supporting in new releases of google.api_core once it reaches its end of life (2027-10-24). Please upgrade to the latest Python version, or at least Python 3.12, to continue receiving updates for google.api_core past that date.
+  warnings.warn(message, FutureWarning)
+  access token: OK
+===== 4. Edge TTS =====
+  edge-tts version: 7.3.1
+  voice: en-US-GuyNeural, rate: +8%
+===== PREFLIGHT RESULT: OK =====
