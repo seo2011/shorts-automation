@@ -1,0 +1,101 @@
+name: Daily Shorts Automation
+
+on:
+  schedule:
+    - cron: '0 15 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ffmpeg libsndfile1 libportaudio2 libasound2-dev \
+            python3-dev build-essential libgl1-mesa-glx \
+            libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1
+          sudo apt-get install -y fonts-noto-cjk fonts-noto-color-emoji fonts-dejavu-core
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Prepare reference speaker audio
+        run: |
+          mkdir -p data/speakers
+          if [ ! -f data/speakers/reference_en.wav ]; then
+            echo '참조 화자 파일이 없습니다. data/speakers/에 직접 넣어주세요'
+          fi
+
+      - name: Run daily pipeline
+        id: pipeline
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          NVIDIA_BASE_URL: ${{ secrets.NVIDIA_BASE_URL }}
+          NVIDIA_MODEL: ${{ secrets.NVIDIA_MODEL }}
+          NVIDIA_TEMPERATURE: ${{ secrets.NVIDIA_TEMPERATURE }}
+          REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+          SDXL_API_URL: ${{ secrets.SDXL_API_URL }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          YOUTUBE_CHANNEL_ID: ${{ secrets.YOUTUBE_CHANNEL_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python -m shorts_pipeline.run_daily
+
+      - name: Upload logs as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-logs-${{ github.run_id }}
+          path: |
+            logs/
+            output/
+          retention-days: 30
+
+      - name: Commit logs and outputs
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add logs/ output/ || true
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: daily run ${{ github.run_id }} - $(date -u +'%Y-%m-%d %H:%M')"
+            git push
+          else
+            echo "No changes to commit"
+          fi
+
+      - name: Notify failure
+        if: failure()
+        run: echo "Pipeline failed. Check logs artifact."
