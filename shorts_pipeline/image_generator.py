@@ -5,6 +5,8 @@ from pathlib import Path
 import requests
 import base64
 import time
+import zlib
+import urllib.parse
 from tqdm import tqdm
 
 
@@ -29,7 +31,9 @@ class ImageGenerator:
                 enhanced_prompt, scene.scene_number, video_id
             )
         else:
-            return self._generate_placeholder(scene.scene_number, video_id)
+            return self._generate_pollinations(
+                enhanced_prompt, scene.scene_number, video_id
+            )
 
     def _enhance_prompt(self, prompt: str) -> str:
         style_suffix = (
@@ -115,6 +119,43 @@ class ImageGenerator:
             local_path=str(local_path),
             prompt_used=prompt,
         )
+
+    def _generate_pollinations(
+        self, prompt: str, scene_num: int, video_id: str
+    ) -> ImageGenerationResult:
+        """무료 이미지 생성 (Pollinations.ai, API 키 불필요)."""
+        seed = zlib.crc32(f"{video_id}-{scene_num}".encode()) % 1_000_000
+        encoded = urllib.parse.quote(prompt[:900], safe="")
+        url = (
+            f"https://image.pollinations.ai/prompt/{encoded}"
+            f"?width=1080&height=1920&model=flux&nologo=true&seed={seed}"
+        )
+
+        last_error = None
+        for attempt in range(3):
+            try:
+                response = requests.get(url, timeout=180)
+                response.raise_for_status()
+                content_type = response.headers.get("Content-Type", "")
+                if (
+                    not content_type.startswith("image")
+                    or len(response.content) < 20000
+                ):
+                    raise ValueError(f"invalid image response ({content_type})")
+                local_path = self.output_dir / f"{video_id}_scene{scene_num:02d}.jpg"
+                local_path.write_bytes(response.content)
+                return ImageGenerationResult(
+                    scene_number=scene_num,
+                    image_url=url,
+                    local_path=str(local_path),
+                    prompt_used=prompt,
+                )
+            except Exception as e:
+                last_error = e
+                print(f"  Pollinations 시도 {attempt + 1}/3 실패: {e}")
+                time.sleep(4)
+
+        raise RuntimeError(f"Pollinations 이미지 생성 실패: {last_error}")
 
     def _generate_placeholder(
         self, scene_num: int, video_id: str

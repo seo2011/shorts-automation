@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     youtube_client_id: str = Field(..., validation_alias="YOUTUBE_CLIENT_ID")
     youtube_client_secret: str = Field(..., validation_alias="YOUTUBE_CLIENT_SECRET")
     youtube_refresh_token: str = Field(..., validation_alias="YOUTUBE_REFRESH_TOKEN")
+    youtube_privacy_status: str = Field(
+        default="unlisted", validation_alias="YOUTUBE_PRIVACY_STATUS"
+    )
     youtube_channel_id: Optional[str] = Field(
         default=None, validation_alias="YOUTUBE_CHANNEL_ID"
     )

@@ -27,6 +27,12 @@ class YouTubeUploader:
         tags: list,
         video_id: str,
     ) -> UploadResult:
+        privacy = settings.youtube_privacy_status or "public"
+        if "#shorts" not in description.lower():
+            description = description + "\n\n#Shorts"
+        if "Shorts" not in tags:
+            tags = tags + ["Shorts"]
+
         body = {
             "snippet": {
                 "title": title[:100],
@@ -37,7 +43,7 @@ class YouTubeUploader:
                 "defaultAudioLanguage": "en",
             },
             "status": {
-                "privacyStatus": "public",
+                "privacyStatus": privacy,
                 "selfDeclaredMadeForKids": False,
             },
         }
@@ -57,28 +63,17 @@ class YouTubeUploader:
                 print(f"업로드 진행: {int(status.progress() * 100)}%")
 
         youtube_id = response["id"]
-        print(f"업로드 완료: {youtube_id}")
+        print(f"업로드 완료: {youtube_id} (privacy={privacy})")
 
         if thumbnail_path and Path(thumbnail_path).exists():
-            self.youtube.thumbnails().set(
-                videoId=youtube_id,
-                media_body=MediaFileUpload(thumbnail_path, mimetype="image/jpeg"),
-            ).execute()
-            print("썸네일 업로드 완료")
-
-        if "#shorts" not in " ".join(tags).lower():
-            self.youtube.videos().update(
-                part="snippet",
-                body={
-                    "id": youtube_id,
-                    "snippet": {
-                        "title": title,
-                        "description": description + "\n\n#Shorts",
-                        "tags": tags + ["Shorts"],
-                        "categoryId": "24",
-                    },
-                },
-            ).execute()
+            try:
+                self.youtube.thumbnails().set(
+                    videoId=youtube_id,
+                    media_body=MediaFileUpload(thumbnail_path, mimetype="image/jpeg"),
+                ).execute()
+                print("썸네일 업로드 완료")
+            except Exception as e:
+                print(f"썸네일 설정 건너뜀 (채널 미인증 가능): {e}")
 
         return UploadResult(
             youtube_id=youtube_id,
