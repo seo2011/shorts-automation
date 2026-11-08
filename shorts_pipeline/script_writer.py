@@ -2,6 +2,7 @@ from typing import List
 from .config import settings
 from .models import TopicResearchResult, ScriptResult, ScriptScene, TopicCategory
 from .database import db
+from .utils import parse_json_response
 from openai import OpenAI
 import json
 
@@ -83,10 +84,9 @@ def write_script(topic: TopicResearchResult) -> ScriptResult:
         ],
         temperature=settings.nvidia_temperature,
         max_tokens=1500,
-        response_format={"type": "json_object"},
     )
 
-    result = json.loads(response.choices[0].message.content)
+    result = parse_json_response(response.choices[0].message.content)
     scenes = [ScriptScene(**s) for s in result["scenes"]]
     result["scenes"] = scenes
     return ScriptResult(**result)

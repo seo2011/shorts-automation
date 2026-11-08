@@ -2,6 +2,7 @@ from typing import List
 from .config import settings
 from .models import TopicResearchResult, TopicCategory
 from .database import db
+from .utils import parse_json_response
 from openai import OpenAI
 import json
 
@@ -81,11 +82,15 @@ def research_topic() -> TopicResearchResult:
         ],
         temperature=settings.nvidia_temperature,
         max_tokens=1000,
-        response_format={"type": "json_object"},
     )
 
-    result = json.loads(response.choices[0].message.content)
-    return TopicResearchResult(**result)
+    result = parse_json_response(response.choices[0].message.content)
+    try:
+        return TopicResearchResult(**result)
+    except Exception:
+        # 카테고리 값이 예상과 다르면 기본값으로 보정 후 재시도
+        result["category"] = "historical_mystery"
+        return TopicResearchResult(**result)
 
 
 def generate_multiple_topics(count: int = 3) -> List[TopicResearchResult]:

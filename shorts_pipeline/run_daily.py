@@ -60,6 +60,7 @@ def main():
 
     try:
         # 1. 주제 탐색
+        error_step = "topic_research"
         console.print("[yellow]1/7 주제 탐색 중...[/yellow]")
         db.log_run_step(log_id, "topic_research")
         topics = generate_multiple_topics(count=3)
@@ -72,6 +73,7 @@ def main():
         steps_completed.append("topic")
 
         # 2. 비디오 레코드 생성 (초안)
+        error_step = "script_writing"
         console.print("[yellow]2/7 대본 작성 중...[/yellow]")
         db.log_run_step(log_id, "script_writing")
         script = write_script(topic)
@@ -83,6 +85,7 @@ def main():
         steps_completed.append("script")
 
         # 3. 이미지 생성
+        error_step = "image_generation"
         console.print("[yellow]3/7 이미지 생성 중...[/yellow]")
         db.log_run_step(log_id, "image_generation")
         db.update_video_status(video_id, VideoStatus.GENERATING_IMAGES)
@@ -91,6 +94,7 @@ def main():
         steps_completed.append("images")
 
         # 4. TTS 생성
+        error_step = "tts_generation"
         console.print("[yellow]4/7 음성 생성 중...[/yellow]")
         db.log_run_step(log_id, "tts_generation")
         db.update_video_status(video_id, VideoStatus.GENERATING_TTS)
@@ -99,6 +103,7 @@ def main():
         steps_completed.append("tts")
 
         # 5. 영상 합성
+        error_step = "video_composition"
         console.print("[yellow]5/7 영상 합성 중...[/yellow]")
         db.log_run_step(log_id, "video_composition")
         db.update_video_status(video_id, VideoStatus.COMPOSING_VIDEO)
@@ -114,6 +119,7 @@ def main():
         steps_completed.append("video")
 
         # 6. YouTube 업로드
+        error_step = "youtube_upload"
         console.print("[yellow]6/7 YouTube 업로드 중...[/yellow]")
         db.log_run_step(log_id, "youtube_upload")
         db.update_video_status(video_id, VideoStatus.UPLOADING)
@@ -132,6 +138,7 @@ def main():
         steps_completed.append("upload")
 
         # 7. 성과 수집
+        error_step = "metrics_collection"
         console.print("[yellow]7/7 성과 지표 수집 중...[/yellow]")
         db.log_run_step(log_id, "metrics_collection")
         performance_analyzer.collect_metrics_for_recent_videos(days_back=7)

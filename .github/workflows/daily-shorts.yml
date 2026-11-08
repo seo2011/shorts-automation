@@ -17,7 +17,7 @@ env:
 jobs:
   build-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,21 +36,31 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            ffmpeg libsndfile1 libportaudio2 libasound2-dev \
+            ffmpeg imagemagick libsndfile1 libportaudio2 libasound2-dev \
             python3-dev build-essential libgl1-mesa-glx \
             libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1
           sudo apt-get install -y fonts-noto-cjk fonts-noto-color-emoji fonts-dejavu-core
 
-      - name: Install Python dependencies
+      - name: Install CPU-only PyTorch
         run: |
           pip install --upgrade pip
+          pip install --index-url https://download.pytorch.org/whl/cpu torch==2.3.0 torchaudio==2.3.0
+
+      - name: Install Python dependencies
+        run: |
           pip install -r requirements.txt
 
-      - name: Prepare reference speaker audio
+      - name: Prepare fonts and speaker audio
         run: |
-          mkdir -p data/speakers
+          mkdir -p assets/fonts data/speakers
+          if [ ! -f assets/fonts/DejaVuSans-Bold.ttf ]; then
+            cp /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf assets/fonts/ 2>/dev/null || true
+          fi
+          if [ ! -f assets/fonts/NotoSansCJK-Bold.ttc ]; then
+            cp /usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc assets/fonts/ 2>/dev/null || true
+          fi
           if [ ! -f data/speakers/reference_en.wav ]; then
-            echo '참조 화자 파일이 없습니다. data/speakers/에 직접 넣어주세요'
+            echo '참조 화자 파일 없음 → 기본 화자(Ana Florence) 사용'
           fi
 
       - name: Run daily pipeline
@@ -59,9 +69,9 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
-          NVIDIA_BASE_URL: ${{ secrets.NVIDIA_BASE_URL }}
-          NVIDIA_MODEL: ${{ secrets.NVIDIA_MODEL }}
-          NVIDIA_TEMPERATURE: ${{ secrets.NVIDIA_TEMPERATURE }}
+          NVIDIA_BASE_URL: ${{ secrets.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1' }}
+          NVIDIA_MODEL: ${{ secrets.NVIDIA_MODEL || 'meta/llama-3.1-70b-instruct' }}
+          NVIDIA_TEMPERATURE: ${{ secrets.NVIDIA_TEMPERATURE || '0.7' }}
           REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
           SDXL_API_URL: ${{ secrets.SDXL_API_URL }}
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}

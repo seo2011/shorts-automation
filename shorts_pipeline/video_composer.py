@@ -6,6 +6,7 @@ from .models import (
     VideoCompositionResult,
 )
 from pathlib import Path
+from typing import List
 from moviepy.editor import (
     ImageClip,
     AudioFileClip,
@@ -47,9 +48,13 @@ class VideoComposer:
         audio_clip = AudioFileClip(tts.audio_path)
         total_duration = audio_clip.duration
 
+        # LLM이 만든 씬 길이를 실제 음성 길이에 맞춰 비율 조정
+        raw_total = sum(max(s.duration_seconds, 0.5) for s in scenes) or 1.0
+        scale = total_duration / raw_total
+        scene_durations = [max(s.duration_seconds, 0.5) * scale for s in scenes]
+
         clips = []
-        for scene, img_result in zip(scenes, images):
-            scene_duration = scene.duration_seconds
+        for scene, img_result, scene_duration in zip(scenes, images, scene_durations):
             img_clip = self._create_ken_burns_clip(
                 img_result.local_path,
                 scene_duration,
@@ -115,20 +120,14 @@ class VideoComposer:
         zoom_h = int(target_h * zoom_factor)
         img_zoomed = img.resize((zoom_w, zoom_h), Image.LANCZOS)
 
-        frames = []
-        num_frames = int(duration * settings.video_fps)
-
-        for i in range(num_frames):
-            progress = i / max(1, num_frames - 1)
+        # 메모리 절약: 프레임을 미리 만들지 않고 요청 시점에 계산
+        def make_frame(t):
+            progress = min(max(t / max(duration, 0.001), 0.0), 1.0)
             eased = progress * progress * (3 - 2 * progress)
             x = int((zoom_w - target_w) * eased * 0.5)
             y = int((zoom_h - target_h) * eased * 0.3)
             frame = img_zoomed.crop((x, y, x + target_w, y + target_h))
-            frames.append(np.array(frame))
-
-        def make_frame(t):
-            idx = min(int(t * settings.video_fps), num_frames - 1)
-            return frames[idx]
+            return np.array(frame)
 
         clip = VideoClip(make_frame, duration=duration)
         return clip

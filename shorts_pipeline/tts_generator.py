@@ -1,10 +1,10 @@
 from .config import settings
 from .models import ScriptScene, TTSResult
 from pathlib import Path
+import wave
 import torch
-import torchaudio
 from TTS.api import TTS
-from typing import List, Dict, Any
+from typing import List
 
 
 class TTSGenerator:
@@ -40,6 +40,7 @@ class TTSGenerator:
             self.tts.tts_to_file(
                 text=full_text,
                 file_path=str(output_path),
+                speaker="Ana Florence",
                 language=settings.tts_language,
                 speed=settings.tts_speed,
             )
@@ -67,8 +68,8 @@ class TTSGenerator:
         )
 
     def _get_audio_duration(self, path: Path) -> float:
-        info = torchaudio.info(str(path))
-        return info.num_frames / info.sample_rate
+        with wave.open(str(path), "rb") as wav_file:
+            return wav_file.getnframes() / float(wav_file.getframerate())
 
 
 tts_generator = TTSGenerator()

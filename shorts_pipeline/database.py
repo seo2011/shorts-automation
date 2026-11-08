@@ -74,14 +74,17 @@ class Database:
         ).eq("id", video_id).execute()
 
     def get_video(self, video_id: str) -> Optional[Dict]:
-        res = (
-            self.client.table("videos")
-            .select("*")
-            .eq("id", video_id)
-            .single()
-            .execute()
-        )
-        return res.data if res.data else None
+        try:
+            res = (
+                self.client.table("videos")
+                .select("*")
+                .eq("id", video_id)
+                .maybe_single()
+                .execute()
+            )
+            return res.data if res and res.data else None
+        except Exception:
+            return None
 
     def get_recent_published(self, limit: int = 20) -> List[Dict]:
         res = (
@@ -95,11 +98,32 @@ class Database:
         return res.data or []
 
     def get_top_performers(self, limit: int = 5, days: int = 30) -> List[Dict]:
-        since = (datetime.utcnow() - timedelta(days=days)).isoformat()
-        res = self.client.rpc(
-            "get_top_videos", {"p_limit": limit, "p_since": since}
-        ).execute()
-        return res.data or []
+        """최근 N일간 조회수 합계 기준 상위 영상 (RPC 없이 조회)"""
+        since = (datetime.utcnow() - timedelta(days=days)).date().isoformat()
+        videos = (
+            self.client.table("videos")
+            .select(
+                "id,title,topic_title,topic_category,hook_text,youtube_id,published_at"
+            )
+            .eq("status", VideoStatus.PUBLISHED.value)
+            .execute()
+        ).data or []
+
+        results = []
+        for v in videos:
+            metrics = (
+                self.client.table("video_metrics")
+                .select("views")
+                .eq("video_id", v["id"])
+                .gte("date", since)
+                .execute()
+            ).data or []
+            total_views = sum(int(m.get("views") or 0) for m in metrics)
+            v["total_views"] = total_views
+            results.append(v)
+
+        results.sort(key=lambda x: x.get("total_views", 0), reverse=True)
+        return results[:limit]
 
     # ===== Metrics =====
     def upsert_metrics(self, metrics: VideoMetricsSnapshot):
@@ -135,15 +159,18 @@ class Database:
 
     # ===== Prompt Versions =====
     def get_active_prompt(self, component: str) -> Optional[Dict]:
-        res = (
-            self.client.table("prompt_versions")
-            .select("*")
-            .eq("component", component)
-            .eq("is_active", True)
-            .single()
-            .execute()
-        )
-        return res.data if res.data else None
+        try:
+            res = (
+                self.client.table("prompt_versions")
+                .select("*")
+                .eq("component", component)
+                .eq("is_active", True)
+                .maybe_single()
+                .execute()
+            )
+            return res.data if res and res.data else None
+        except Exception:
+            return None
 
     def create_prompt_version(
         self,

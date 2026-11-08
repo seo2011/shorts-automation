@@ -1,6 +1,7 @@
 from .config import settings
 from .database import db
 from .performance_analyzer import performance_analyzer
+from .utils import parse_json_response
 from openai import OpenAI
 import json
 
@@ -64,10 +65,9 @@ class PromptOptimizer:
                 ],
                 temperature=0.5,
                 max_tokens=2000,
-                response_format={"type": "json_object"},
             )
 
-            result = json.loads(response.choices[0].message.content)
+            result = parse_json_response(response.choices[0].message.content)
             new_version = current_version + 1
             prompt_id = db.create_prompt_version(
                 component=component,
