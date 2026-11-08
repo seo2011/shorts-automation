@@ -1,75 +1,83 @@
 from .config import settings
 from .models import ScriptScene, TTSResult
 from pathlib import Path
-import wave
-import torch
-from TTS.api import TTS
 from typing import List
+import asyncio
+import json
+import subprocess
+
+import edge_tts
 
 
 class TTSGenerator:
+    """Edge TTS 기반 음성 생성기.
+
+    - 모델 다운로드 불필요 (수 초 내 생성)
+    - WordBoundary 이벤트로 단어별 타임스탬프 확보
+    """
+
     def __init__(self):
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"TTS device: {self.device}")
-
-        self.tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(self.device)
-
-        self.speaker_wav = Path(settings.tts_speaker_wav)
-        if not self.speaker_wav.exists():
-            print(f"참조 화자 파일 없음: {self.speaker_wav}, 기본 화자 사용")
-            self.speaker_wav = None
-
+        self.voice = settings.tts_voice
+        self.rate = settings.tts_rate
         self.output_dir = Path(settings.output_dir) / "audio"
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def generate_for_script(
         self, scenes: List[ScriptScene], video_id: str
     ) -> TTSResult:
-        full_text = " ".join([s.narration for s in scenes])
-        output_path = self.output_dir / f"{video_id}_narration.wav"
+        full_text = " ".join([s.narration for s in scenes]).strip()
+        output_path = self.output_dir / f"{video_id}_narration.mp3"
 
-        if self.speaker_wav:
-            self.tts.tts_to_file(
-                text=full_text,
-                file_path=str(output_path),
-                speaker_wav=str(self.speaker_wav),
-                language=settings.tts_language,
-                speed=settings.tts_speed,
-            )
-        else:
-            self.tts.tts_to_file(
-                text=full_text,
-                file_path=str(output_path),
-                speaker="Ana Florence",
-                language=settings.tts_language,
-                speed=settings.tts_speed,
-            )
+        word_boundaries = []
 
-        duration = self._get_audio_duration(output_path)
-        words = full_text.split()
-        word_duration = duration / len(words) if words else 0
+        async def _run():
+            communicate = edge_tts.Communicate(full_text, self.voice, rate=self.rate)
+            with open(output_path, "wb") as f:
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "audio":
+                        f.write(chunk["data"])
+                    elif chunk["type"] == "WordBoundary":
+                        start = chunk["offset"] / 10_000_000
+                        end = (chunk["offset"] + chunk["duration"]) / 10_000_000
+                        word_boundaries.append(
+                            {"word": chunk["text"], "start": start, "end": end}
+                        )
 
-        timestamps = []
-        current_time = 0.0
-        for word in words:
-            timestamps.append(
-                {
-                    "word": word,
-                    "start": round(current_time, 3),
-                    "end": round(current_time + word_duration, 3),
-                }
-            )
-            current_time += word_duration
+        asyncio.run(_run())
+
+        if not output_path.exists() or output_path.stat().st_size == 0:
+            raise RuntimeError("Edge TTS 음성 생성 실패 (빈 파일)")
+
+        duration = self._get_audio_duration(output_path, word_boundaries)
 
         return TTSResult(
             audio_path=str(output_path),
             duration_seconds=duration,
-            word_timestamps=timestamps,
+            word_timestamps=word_boundaries,
         )
 
-    def _get_audio_duration(self, path: Path) -> float:
-        with wave.open(str(path), "rb") as wav_file:
-            return wav_file.getnframes() / float(wav_file.getframerate())
+    def _get_audio_duration(self, path: Path, boundaries: List[dict]) -> float:
+        # ffprobe 우선, 실패 시 WordBoundary 마지막 시점 사용
+        try:
+            out = subprocess.check_output(
+                [
+                    "ffprobe",
+                    "-v",
+                    "quiet",
+                    "-print_format",
+                    "json",
+                    "-show_format",
+                    str(path),
+                ],
+                stderr=subprocess.DEVNULL,
+                timeout=30,
+            )
+            data = json.loads(out)
+            return float(data["format"]["duration"])
+        except Exception:
+            if boundaries:
+                return float(boundaries[-1]["end"]) + 0.2
+            return 0.0
 
 
 tts_generator = TTSGenerator()

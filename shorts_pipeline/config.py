@@ -62,8 +62,10 @@ class Settings(BaseSettings):
     words_per_minute: int = Field(default=160)
     max_script_words: int = Field(default=80)
 
-    # TTS Settings
+    # TTS Settings (Edge TTS - 무료, 모델 다운로드 불필요)
     tts_language: str = Field(default="en")
+    tts_voice: str = Field(default="en-US-GuyNeural", validation_alias="TTS_VOICE")
+    tts_rate: str = Field(default="+8%", validation_alias="TTS_RATE")
     tts_speaker_wav: str = Field(default="data/speakers/reference_en.wav")
     tts_speed: float = Field(default=1.0)
 

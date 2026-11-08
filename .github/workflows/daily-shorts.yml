@@ -35,31 +35,22 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            ffmpeg imagemagick libsndfile1 libportaudio2 libasound2-dev \
-            libgomp1 python3-dev build-essential
+          sudo apt-get install -y --no-install-recommends ffmpeg imagemagick
           sudo apt-get install -y fonts-noto-cjk fonts-noto-color-emoji fonts-dejavu-core || true
-
-      - name: Install CPU-only PyTorch
-        run: |
-          pip install --upgrade pip
-          pip install --index-url https://download.pytorch.org/whl/cpu torch==2.3.0 torchaudio==2.3.0
 
       - name: Install Python dependencies
         run: |
+          pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Prepare fonts and speaker audio
+      - name: Prepare fonts
         run: |
-          mkdir -p assets/fonts data/speakers
+          mkdir -p assets/fonts
           if [ ! -f assets/fonts/DejaVuSans-Bold.ttf ]; then
             cp /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf assets/fonts/ 2>/dev/null || true
           fi
           if [ ! -f assets/fonts/NotoSansCJK-Bold.ttc ]; then
             cp /usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc assets/fonts/ 2>/dev/null || true
-          fi
-          if [ ! -f data/speakers/reference_en.wav ]; then
-            echo '참조 화자 파일 없음 → 기본 화자(Ana Florence) 사용'
           fi
 
       - name: Run daily pipeline
@@ -79,9 +70,30 @@ jobs:
           YOUTUBE_CHANNEL_ID: ${{ secrets.YOUTUBE_CHANNEL_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TTS_VOICE: ${{ secrets.TTS_VOICE || 'en-US-GuyNeural' }}
+          TTS_RATE: ${{ secrets.TTS_RATE || '+8%' }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
+          python - <<'PY'
+          import os
+          required = [
+              "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "NVIDIA_API_KEY",
+              "YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN",
+          ]
+          missing = []
+          print("===== Secret preflight check =====")
+          for k in required:
+              v = os.environ.get(k, "")
+              if v:
+                  print(f"{k}: SET (length={len(v)})")
+              else:
+                  print(f"{k}: MISSING")
+                  missing.append(k)
+          if missing:
+              raise SystemExit("MISSING SECRETS: " + ", ".join(missing))
+          print("All required secrets present. Starting pipeline...")
+          PY
           python -m shorts_pipeline.run_daily
 
       - name: Upload logs as artifact
