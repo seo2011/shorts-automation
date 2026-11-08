@@ -53,9 +53,41 @@ jobs:
             cp /usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc assets/fonts/ 2>/dev/null || true
           fi
 
+      - name: Check required secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: |
+          mkdir -p logs
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee logs/preflight.log
+          import os
+          required = [
+              "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "NVIDIA_API_KEY",
+              "YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN",
+          ]
+          missing = []
+          print("===== Secret preflight check =====")
+          for k in required:
+              v = os.environ.get(k, "")
+              if v:
+                  print(f"{k}: SET (length={len(v)})")
+              else:
+                  print(f"{k}: MISSING")
+                  missing.append(k)
+          if missing:
+              raise SystemExit("MISSING SECRETS: " + ", ".join(missing))
+          print("All required secrets present.")
+          PY
+
       - name: Run daily pipeline
         id: pipeline
         env:
+          PYTHONUNBUFFERED: '1'
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
@@ -75,48 +107,29 @@ jobs:
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          python - <<'PY'
-          import os
-          required = [
-              "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "NVIDIA_API_KEY",
-              "YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN",
-          ]
-          missing = []
-          print("===== Secret preflight check =====")
-          for k in required:
-              v = os.environ.get(k, "")
-              if v:
-                  print(f"{k}: SET (length={len(v)})")
-              else:
-                  print(f"{k}: MISSING")
-                  missing.append(k)
-          if missing:
-              raise SystemExit("MISSING SECRETS: " + ", ".join(missing))
-          print("All required secrets present. Starting pipeline...")
-          PY
-          python -m shorts_pipeline.run_daily
+          mkdir -p logs
+          set -o pipefail
+          python -m shorts_pipeline.run_daily 2>&1 | tee logs/pipeline.log
 
       - name: Upload logs as artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pipeline-logs-${{ github.run_id }}
-          path: |
-            logs/
-            output/
+          path: logs/
           retention-days: 30
 
-      - name: Commit logs and outputs
+      - name: Commit run logs
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add logs/ output/ || true
+          git add -f logs/ || true
           if ! git diff --staged --quiet; then
-            git commit -m "chore: daily run ${{ github.run_id }} - $(date -u +'%Y-%m-%d %H:%M')"
+            git commit -m "chore: run logs ${{ github.run_id }}"
             git push
           else
-            echo "No changes to commit"
+            echo "No log changes to commit"
           fi
 
       - name: Notify failure
