@@ -2,3 +2,7 @@ __pycache__/
 .env 
 output/ 
 data/speakers/*.wav 
+client_secret.json
+get_token.py
+*.env
+data/reference

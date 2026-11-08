@@ -2,7 +2,9 @@ name: Daily Shorts Automation
 
 on:
   schedule:
-    - cron: '0 15 * * *'
+    # 하루 3회: UTC 00:00 / 12:00 / 17:00
+    # = 미국 동부(EST) 기준 저녁 7시 / 아침 7시 / 낮 12시
+    - cron: '0 0,12,17 * * *'
   workflow_dispatch:
 
 permissions:
