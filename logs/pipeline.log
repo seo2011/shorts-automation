@@ -1,0 +1,31 @@
+╭──────────────────────────────────╮
+│ 🎬 Shorts Daily Pipeline Started │
+│ Run ID: 42476718155              │
+╰──────────────────────────────────╯
+1/7 주제 탐색 중...
+주제 생성 실패: '\n    "topic_title"'
+주제 생성 실패: '\n    "topic_title"'
+주제 생성 실패: '\n    "topic_title"'
+╭────────────────────────────────────╮
+│ ❌ 파이프라인 실패: 주제 생성 실패 │
+╰────────────────────────────────────╯
+주간 프롬프트 최적화 실행...
+분석할 데이터 부족 (최소 3개 영상 필요)
+Traceback (most recent call last):
+  File "/home/runner/work/shorts-automation/shorts-automation/shorts_pipeline/run_daily.py", line 68, in main
+    raise Exception("주제 생성 실패")
+Exception: 주제 생성 실패
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/runner/work/shorts-automation/shorts-automation/shorts_pipeline/run_daily.py", line 178, in <module>
+    main()
+  File "/home/runner/work/shorts-automation/shorts-automation/shorts_pipeline/run_daily.py", line 161, in main
+    db.log_run_complete(
+  File "/home/runner/work/shorts-automation/shorts-automation/shorts_pipeline/database.py", line 261, in log_run_complete
+    duration = int((datetime.utcnow() - start).total_seconds())
+                    ~~~~~~~~~~~~~~~~~~^~~~~~~
+TypeError: can't subtract offset-naive and offset-aware datetimes
