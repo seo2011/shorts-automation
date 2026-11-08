@@ -10,10 +10,8 @@ from typing import List
 from moviepy.editor import (
     ImageClip,
     AudioFileClip,
-    TextClip,
     CompositeVideoClip,
     concatenate_videoclips,
-    ColorClip,
     VideoClip,
 )
 from PIL import Image, ImageDraw, ImageFont
@@ -132,33 +130,64 @@ class VideoComposer:
         clip = VideoClip(make_frame, duration=duration)
         return clip
 
-    def _create_subtitle_clip(
-        self, text: str, duration: float, video_size: tuple
-    ) -> TextClip:
+    def _create_subtitle_clip(self, text: str, duration: float, video_size: tuple):
+        """PIL로 자막 이미지를 직접 렌더링 (ImageMagick 불필요)."""
         wrapped = self._wrap_text(text, max_chars_per_line=28)
+        font = self._load_pil_font(settings.subtitle_font_size)
+        stroke_width = settings.subtitle_stroke_width
+        spacing = 10
+        padding_x = 30
+        padding_y = 18
 
-        txt_clip = TextClip(
+        probe = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
+        bbox = probe.multiline_textbbox(
+            (0, 0),
             wrapped,
-            fontsize=settings.subtitle_font_size,
-            color=settings.subtitle_color,
-            font=self.font_path,
-            stroke_color=settings.subtitle_stroke_color,
-            stroke_width=settings.subtitle_stroke_width,
-            method="caption",
-            size=(video_size[0] - 100, None),
+            font=font,
+            spacing=spacing,
             align="center",
+            stroke_width=stroke_width,
         )
-        txt_clip = txt_clip.set_position(("center", video_size[1] - 150 - txt_clip.h))
-        txt_clip = txt_clip.set_duration(duration)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
 
-        bg_clip = ColorClip(
-            size=(txt_clip.w + 40, txt_clip.h + 20), color=(0, 0, 0), duration=duration
-        ).set_opacity(0.6)
-        bg_clip = bg_clip.set_position(
-            ("center", video_size[1] - 150 - txt_clip.h - 10)
+        canvas_w = int(min(text_w + padding_x * 2, video_size[0] - 40))
+        canvas_h = int(text_h + padding_y * 2)
+
+        img = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        draw.rounded_rectangle(
+            [0, 0, canvas_w - 1, canvas_h - 1], radius=18, fill=(0, 0, 0, 150)
+        )
+        draw.multiline_text(
+            (canvas_w / 2, padding_y - bbox[1]),
+            wrapped,
+            font=font,
+            fill=settings.subtitle_color,
+            align="center",
+            spacing=spacing,
+            stroke_width=stroke_width,
+            stroke_fill=settings.subtitle_stroke_color,
+            anchor="ma",
         )
 
-        return CompositeVideoClip([bg_clip, txt_clip])
+        clip = ImageClip(np.array(img), transparent=True).set_duration(duration)
+        clip = clip.set_position(("center", video_size[1] - 170 - canvas_h))
+        return clip
+
+    def _load_pil_font(self, size: int):
+        candidates = [
+            self.font_path,
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+            "C:/Windows/Fonts/arialbd.ttf",
+        ]
+        for candidate in candidates:
+            try:
+                return ImageFont.truetype(candidate, size)
+            except Exception:
+                continue
+        return ImageFont.load_default()
 
     def _wrap_text(self, text: str, max_chars_per_line: int = 28) -> str:
         words = text.split()
@@ -188,10 +217,7 @@ class VideoComposer:
         img = Image.alpha_composite(img, overlay)
 
         draw = ImageDraw.Draw(img)
-        try:
-            font = ImageFont.truetype(self.font_path, 72)
-        except Exception:
-            font = ImageFont.load_default()
+        font = self._load_pil_font(72)
 
         wrapped = self._wrap_text(title_text, max_chars_per_line=18)
         bbox = draw.multiline_textbbox(
@@ -200,7 +226,6 @@ class VideoComposer:
             font=font,
             align="center",
             stroke_width=3,
-            stroke_fill="black",
         )
         text_w = bbox[2] - bbox[0]
         text_h = bbox[3] - bbox[1]

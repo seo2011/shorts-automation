@@ -1,8 +1,7 @@
--- Supabase SQL Editor에서 실행하세요
-create extension if not exists "uuid-ossp";
+-- Supabase SQL Editor?�서 ?�행?�세??create extension if not exists "uuid-ossp";
 create extension if not exists "pgcrypto";
 
-create table videos (
+create table if not exists videos (
     id uuid primary key default uuid_generate_v4(),
     youtube_id text unique,
     title text not null,
@@ -24,7 +23,7 @@ create table videos (
     updated_at timestamptz default now()
 );
 
-create table video_metrics (
+create table if not exists video_metrics (
     id uuid primary key default uuid_generate_v4(),
     video_id uuid references videos(id) on delete cascade,
     date date not null,
@@ -42,7 +41,7 @@ create table video_metrics (
     unique(video_id, date)
 );
 
-create table prompt_versions (
+create table if not exists prompt_versions (
     id uuid primary key default uuid_generate_v4(),
     component text not null,
     version integer not null,
@@ -57,7 +56,7 @@ create table prompt_versions (
     unique(component, version)
 );
 
-create table pipeline_runs (
+create table if not exists pipeline_runs (
     id uuid primary key default uuid_generate_v4(),
     run_id text,
     status text not null,
@@ -71,10 +70,10 @@ create table pipeline_runs (
     github_run_url text
 );
 
-create index idx_videos_status on videos(status);
-create index idx_videos_published_at on videos(published_at desc);
-create index idx_metrics_video_date on video_metrics(video_id, date desc);
-create index idx_prompt_active on prompt_versions(component, is_active) where is_active;
+create index if not exists idx_videos_status on videos(status);
+create index if not exists idx_videos_published_at on videos(published_at desc);
+create index if not exists idx_metrics_video_date on video_metrics(video_id, date desc);
+create index if not exists idx_prompt_active on prompt_versions(component, is_active) where is_active;
 
 alter table videos enable row level security;
 alter table video_metrics enable row level security;

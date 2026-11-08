@@ -84,6 +84,25 @@ jobs:
           print("All required secrets present.")
           PY
 
+      - name: Preflight connectivity checks
+        env:
+          PYTHONUNBUFFERED: '1'
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          NVIDIA_BASE_URL: ${{ secrets.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1' }}
+          NVIDIA_MODEL: ${{ secrets.NVIDIA_MODEL || 'meta/llama-3.1-70b-instruct' }}
+          NVIDIA_TEMPERATURE: ${{ secrets.NVIDIA_TEMPERATURE || '0.7' }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          TTS_VOICE: ${{ secrets.TTS_VOICE || 'en-US-GuyNeural' }}
+          TTS_RATE: ${{ secrets.TTS_RATE || '+8%' }}
+        run: |
+          mkdir -p logs
+          set -o pipefail
+          python -m shorts_pipeline.preflight 2>&1 | tee logs/preflight_checks.log
+
       - name: Run daily pipeline
         id: pipeline
         env:

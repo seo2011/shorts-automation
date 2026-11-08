@@ -132,9 +132,9 @@ class ImageGenerator:
         )
 
         last_error = None
-        for attempt in range(3):
+        for attempt in range(2):
             try:
-                response = requests.get(url, timeout=180)
+                response = requests.get(url, timeout=120)
                 response.raise_for_status()
                 content_type = response.headers.get("Content-Type", "")
                 if (

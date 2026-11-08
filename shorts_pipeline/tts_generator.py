@@ -31,12 +31,17 @@ class TTSGenerator:
         word_boundaries = []
 
         async def _run():
-            communicate = edge_tts.Communicate(full_text, self.voice, rate=self.rate)
+            communicate = edge_tts.Communicate(
+                full_text,
+                self.voice,
+                rate=self.rate,
+                boundary="WordBoundary",
+            )
             with open(output_path, "wb") as f:
                 async for chunk in communicate.stream():
                     if chunk["type"] == "audio":
                         f.write(chunk["data"])
-                    elif chunk["type"] == "WordBoundary":
+                    elif chunk["type"] in ("WordBoundary", "SentenceBoundary"):
                         start = chunk["offset"] / 10_000_000
                         end = (chunk["offset"] + chunk["duration"]) / 10_000_000
                         word_boundaries.append(
