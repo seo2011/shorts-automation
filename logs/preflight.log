@@ -1,0 +1,8 @@
+===== Secret preflight check =====
+SUPABASE_URL: SET (length=40)
+SUPABASE_SERVICE_KEY: SET (length=41)
+NVIDIA_API_KEY: SET (length=70)
+YOUTUBE_CLIENT_ID: SET (length=72)
+YOUTUBE_CLIENT_SECRET: SET (length=35)
+YOUTUBE_REFRESH_TOKEN: SET (length=103)
+All required secrets present.
